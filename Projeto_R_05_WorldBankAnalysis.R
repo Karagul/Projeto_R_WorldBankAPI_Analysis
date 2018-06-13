@@ -1,5 +1,7 @@
 ## Projeto 05 - WorldBankAnalysis
 
+# Objetivos da analise: 
+
 ## Carregando os pacotes necessarios
 
 library(ggplot2)
@@ -19,7 +21,7 @@ db_search <- WDIsearch('continent')
 wb_debt <- WDI(indicator = c('SP.POP.TOTL', 'NY.GDP.PCAP.KD', 'NE.CON.GOVT.ZS'),
                start = 2016, end = 2016, extra = TRUE)
 
-## Data Munging
+## Data Cleaning
 
 # Transformacao em tbl, retirada de coluna iso2c, e nomeacao das colunas
 wb_debt <- as.tbl(wb_debt) %>% 
@@ -34,50 +36,88 @@ colnames(wb_debt) <- c('country', 'year', 'pop_total', 'GDP_per_cap',
 glimpse(wb_debt)
 summary(wb_debt)
 
-# Identificando as obs com NA
-wb_debt_NA <- wb_debt %>% 
-  filter(is.na(pop_total) | is.na(GDP_per_cap) | is.na(DEBT_perc_GDP)) %>% select(country)
-table(wb_debt_NA)
-
-#Identificando obs generalistas
+# Identificando informacoes regionais como paises
 wb_debt_trash <- wb_debt %>%
-  filter(region == 'Aggregates') %>% select(country)
+  filter(region == 'Aggregates') %>% 
+  select(country)
 table(wb_debt_trash)
 
-# Retirando valores NA 
+# Identificando as obs com NA
+wb_debt_NA <- wb_debt %>% 
+  filter(is.na(pop_total) | is.na(GDP_per_cap) | is.na(DEBT_perc_GDP) | is.na(income)) %>% 
+  select(country)
+table(wb_debt_NA)
+
+# Retirando valores inutes a analise
 wb_debt_clean <- wb_debt %>% 
   anti_join(wb_debt_NA) %>%
   anti_join(wb_debt_trash)
 
-# Obs Brasil
-br <- wb_debt_clean[wb_debt_clean$country == 'Brazil']
+## EDA
 
-# ## Grafico 1 --> PIB per capita vs Gastos com Securidade (%PIB)
+# Plot 1: Gastos do Governo como Percentual do PIB vs PIB per Capita
 
-p <- plot_ly(wb_debt_clean, x = ~GDP_per_cap, y = ~DEBT_perc_GDP, 
-             text = ~country,
+# Criacao de um label para BR na feature income
+wb_debt_br <- wb_debt_clean
+levels(wb_debt_br$income) <- c(levels(wb_debt_br$income), 'Brazil')
+wb_debt_br[wb_debt_br$country == 'Brazil', 'income'] = 'Brazil'
+
+# Criacao de uma funcao para vline e hline no plot.ly
+vline <- function(x = 0, color = "red") {
+  list(
+    type = "line", 
+    y0 = 0, 
+    y1 = 1, 
+    yref = "paper",
+    x0 = x, 
+    x1 = x, 
+    line = list(color = color)
+  )
+}hline <- function(y = 0, color = "blue") {
+  list(
+    type = "line", 
+    x0 = 0, 
+    x1 = 1, 
+    xref = "paper",
+    y0 = y, 
+    y1 = y, 
+    line = list(color = color)
+  )
+}
+
+plot_1 <- plot_ly(wb_debt_br, x = ~GDP_per_cap, y = ~DEBT_perc_GDP, 
              type = 'scatter',
              mode = 'markers', 
              color = ~income,
-             colors = c('Green', 'Green', 'Red', 'Red', 'Orange'), 
-             size = ~sqrt(pop_total),
-             marker = list(sizemode = 'diameter')) %>%
+             colors = c('Green', 'Green', 'Red', 'Red', 'Orange', 'Blue'), 
+             size = ~pop_total,
+             alpha = 0.5,
+             marker = list(sizemode = 'diameter'),
+             hoverinfo = 'text',
+             text = ~paste('Country:', country, '<br>PIB per Capita:', GDP_per_cap,
+                           '<br>Divida como Percentual do PIB (%):', DEBT_perc_GDP)) %>%
   layout(title = 'Gastos do Governo como Percentual do PIB vs PIB per Capita',
          xaxis = list(showgrid = FALSE,
                       type = 'log',
                       title = 'PIB per Capita'),
          yaxis = list(showgrid = FALSE,
-                      title = 'DÃ?vida como Percentual do PIB'))
+                      title = 'Divida como Percentual do PIB (%)'),
+         shapes = list(
+           list(type='line', x0= median(wb_debt_br$GDP_per_cap), x1= median(wb_debt_br$GDP_per_cap), 
+                y0 = 0, y1=max(wb_debt_br$DEBT_perc_GDP), line = list(color = 'red', dash='dot')),
+           
+           list(type='line', x0= min(wb_debt_br$GDP_per_cap), x1 = max(wb_debt_br$GDP_per_cap), 
+                y0 = median(wb_debt_br$DEBT_perc_GDP), y1 = median(wb_debt_br$DEBT_perc_GDP), 
+                line = list(color = 'red', dash='dot'))))
+plot_1
 
-#### RESULTADO --------
-p
 
 
-#Acessando a API e publicando
-Sys.setenv("plotly_username"="Rix_Carboni")
-Sys.setenv("plotly_api_key"="E1cCjrwRMJdsyF81fpB8")
-chart_link = api_create(p, filename="Governement_Expenditure_vs_GDP_per_Capita")
-chart_link
+# #Acessando a API e publicando
+# Sys.setenv("plotly_username"="Rix_Carboni")
+# Sys.setenv("plotly_api_key"="E1cCjrwRMJdsyF81fpB8")
+# chart_link = api_create(p, filename="Governement_Expenditure_vs_GDP_per_Capita")
+# chart_link
 
 
 ####################################
